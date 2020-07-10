@@ -190,6 +190,20 @@
   (import-wiki-pages! db config)
   nil)
 
+(defn get-subprojects [project-id db config]
+  (let [subproject-blacklist-names (:subproject-component-blacklist config)
+        subproject-blacklist-db-ids (d/q queries/q-projects-by-names @db subproject-blacklist-names)]
+    (->> [project-id]
+         (d/q queries/q-subprojects-by-projects @db queries/r-subproject)
+         (coll-util/seq-difference-swapped subproject-blacklist-db-ids)
+         (d/pull-many @db '[:db/id :project/name]))))
+
+(defn get-milestones [project-id db]
+  (->> [project-id]
+       (d/q queries/q-milestones-by-projects @db queries/r-subproject)
+       (d/pull-many @db '[:db/id :project/name :project/description {:project/color [:color/key]}])
+       (group-by :project/name)))
+
 (defn sync-jira-projects!
   "Identify already existing projects to migrate on JIRA and update our information (ids) about them"
   [db config]
@@ -199,17 +213,9 @@
                         (d/pull-many @db '[:db/id :project/jira-key]))]
       (doseq [project projects]
         (let [project-id (:db/id project)
-              subproject-blacklist-names (:subproject-component-blacklist config)
-              subproject-blacklist-db-ids (d/q queries/q-projects-by-names @db subproject-blacklist-names)
-              subprojects (->> [project-id]
-                               (d/q queries/q-subprojects-by-projects @db queries/r-subproject)
-                               (coll-util/seq-difference-swapped subproject-blacklist-db-ids)
-                               (d/pull-many @db '[:db/id :project/name]))
+              subprojects (get-subprojects project-id db config)
               jira-board-id (:project/jira-board-id project)
-              milestones (->> [project-id]
-                              (d/q queries/q-milestones-by-projects @db queries/r-subproject)
-                              (d/pull-many @db '[:db/id :project/name :project/description {:project/color [:color/key]}])
-                              (group-by :project/name))
+              milestones (get-milestones project-id db)
               ; We sometimes have Phabricator milestones with duplicate names (from subprojects) or similar names (accidential duplications) that we merge into one JIRA sprint
               milestone-unified-names (->> milestones
                                            keys
