@@ -70,13 +70,14 @@
       projects-with-color-refs)))
 
 (defn extract-priorities [tasks]
-  (-> tasks
-      (->>
-        (map :task/priority)
-        (map (fn [priority] (update priority :color #(or % "none")))))
-      set
-      seq
-      (->> (map #(coll-util/add-ns-to-keys :task-priority %)))))
+  (->> tasks
+       (map :task/priority)
+       (map (fn [priority] (dissoc priority :subpriority)))
+       (map (fn [priority] (update priority :color #(or % "none"))))
+       (group-by :name)
+       (map (fn [[_name priorities]] (first priorities)))
+       seq
+       (map #(coll-util/add-ns-to-keys :task-priority %))))
 
 (defn import-tasks!
   "Fetch tasks and store them in `db`"
