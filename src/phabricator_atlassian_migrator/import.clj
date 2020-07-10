@@ -69,6 +69,15 @@
       (d/transact! db projects-with-color-refs)
       projects-with-color-refs)))
 
+(defn extract-priorities [tasks]
+  (-> tasks
+      (->>
+        (map :task/priority)
+        (map (fn [priority] (update priority :color #(or % "none")))))
+      set
+      seq
+      (->> (map #(coll-util/add-ns-to-keys :task-priority %)))))
+
 (defn import-tasks!
   "Fetch tasks and store them in `db`"
   [db config]
@@ -83,13 +92,7 @@
                     set
                     seq
                     (->> (map #(coll-util/add-ns-to-keys :task-status %))))
-          priorities (-> tasks
-                         (->>
-                           (map :task/priority)
-                           (map (fn [priority] (update priority :color #(or % "none")))))
-                         set
-                         seq
-                         (->> (map #(coll-util/add-ns-to-keys :task-priority %))))
+          priorities (extract-priorities tasks)
           tasks-with-status-and-priority-refs (map
                                                 #(-> %
                                                      (update :task/status (partial db-util/map->ref :name :task-status/name))
